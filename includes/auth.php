@@ -25,16 +25,17 @@ function csrf_check(): void {
 }
 
 // Call at the top of every admin page. Re-checks the DB so a deactivated admin is locked out immediately.
+// A signed-in customer who opens an admin URL is only redirected: their own session is left alone.
 function require_admin(): void {
-    $id = $_SESSION['user']['id'] ?? null;
-    if ($id) {
+    $isAdminSession = ($_SESSION['user']['role'] ?? '') === 'admin';
+    if ($isAdminSession) {
         $st = db()->prepare("SELECT 1 FROM users WHERE id = ? AND role = 'admin' AND is_active = 1");
-        $st->execute([$id]);
+        $st->execute([$_SESSION['user']['id'] ?? 0]);
         if ($st->fetchColumn()) {
             return;
         }
+        $_SESSION = [];   // the admin was deactivated or removed
     }
-    $_SESSION = [];
     header('Location: ../login.php');
     exit;
 }

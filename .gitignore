@@ -1,0 +1,8 @@
+# Local database settings (copy config.example.php to config.local.php)
+config.local.php
+.env
+
+# Logs and OS files
+*.log
+.DS_Store
+Thumbs.db

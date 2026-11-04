@@ -54,7 +54,10 @@ function public_header(string $title, bool $onHome = false): void {
     </nav>
     <?php if (($user['role'] ?? '') === 'admin'): ?>
       <a class="btn btn-road" href="admin/dashboard.php">Dashboard</a>
+    <?php elseif (($user['role'] ?? '') === 'user'): ?>
+      <a class="btn btn-road" href="home.php">My account</a>
     <?php else: ?>
+      <a href="register.php" style="text-decoration:none;font-weight:600">Sign up</a>
       <a class="btn btn-road" href="<?= $onHome ? '#login' : 'login.php' ?>">Log in</a>
     <?php endif; ?>
   </div>
@@ -74,6 +77,7 @@ function login_form(string $error = ''): void {
     <input type="password" name="password" autocomplete="current-password" required>
   </label>
   <button class="btn btn-road">Log in</button>
+  <p style="margin:0;font-size:.9rem">New here? <a href="register.php">Create an account</a></p>
 </form>
 <?php
 }
