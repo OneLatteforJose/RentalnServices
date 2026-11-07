@@ -6,11 +6,11 @@ $local = __DIR__ . '/../config.local.php';
 if (is_file($local)) {
     require $local;
 }
-define('DB_HOST', 'localhost');
-define('DB_PORT', '3306');
-define('DB_NAME', 'booking_and_services');
-define('DB_USER', 'root');
-define('DB_PASS', '');
+defined('DB_HOST') || define('DB_HOST', getenv('DB_HOST') ?: 'localhost');
+defined('DB_PORT') || define('DB_PORT', getenv('DB_PORT') ?: '3306');
+defined('DB_NAME') || define('DB_NAME', getenv('DB_NAME') ?: 'booking_and_services');
+defined('DB_USER') || define('DB_USER', getenv('DB_USER') ?: 'root');
+defined('DB_PASS') || define('DB_PASS', getenv('DB_PASS') !== false ? getenv('DB_PASS') : '');
 
 function db(): PDO {
     static $pdo = null;
