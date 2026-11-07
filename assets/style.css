@@ -25,6 +25,8 @@ a{color:var(--link)}
 .main{min-width:0;display:flex;flex-direction:column}
 .topbar{background:#fff;border-bottom:1px solid var(--line);min-height:56px;display:flex;align-items:center;justify-content:flex-end;gap:1.1rem;padding:.4rem 1.5rem}
 .welcome{color:var(--muted)} .welcome b{color:var(--fg)}
+.cityline{display:inline-flex;align-items:center;gap:.35rem;margin-right:auto;color:var(--green);font-weight:600}
+.cityline svg{width:16px;height:16px}
 .bell{position:relative;display:grid;place-items:center;width:34px;height:34px;color:var(--fg);text-decoration:none;border-radius:50%}
 .bell:hover{background:var(--bg)} .bell svg{width:20px;height:20px}
 .bell .dot{position:absolute;top:-4px;right:-6px;min-width:19px;height:19px;padding:0 5px;border-radius:999px;background:var(--red);color:#fff;font-size:.68rem;font-weight:700;display:grid;place-items:center;border:2px solid #fff}
@@ -104,9 +106,14 @@ button:disabled{opacity:.5;cursor:not-allowed}
 .tabs{display:flex;gap:.4rem;margin:.4rem 0 1rem;flex-wrap:wrap}
 .tabs a{padding:.35rem .85rem;border:1px solid var(--line);background:#fff;border-radius:999px;color:var(--fg);text-decoration:none;font-size:.85rem}
 .tabs a:hover{background:var(--mint)} .tabs a.on{background:var(--green-3);color:#fff;border-color:var(--green-3)}
+.tabs .count{display:inline-block;min-width:1.35rem;margin-left:.35rem;padding:0 .4rem;border-radius:999px;background:var(--gold);color:#fff;font-size:.72rem;font-weight:700;text-align:center}
 dl.kv{display:grid;grid-template-columns:11rem 1fr;gap:.55rem 1rem;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:1.1rem 1.3rem;margin:0 0 1.25rem}
 dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;overflow-wrap:anywhere}
 details summary{cursor:pointer}
+.actions{display:flex;flex-wrap:wrap;gap:.7rem;align-items:flex-end;margin:0}
+.actions form{margin:0;display:flex;gap:.6rem;align-items:flex-end;flex-wrap:wrap}
+.note{background:#fff8e6;border-left:4px solid var(--gold);padding:.7rem 1rem;border-radius:10px;margin:0 0 1rem}
+button.danger{background:#fff;color:#9b1c1c;border:1px solid #e9b8b8} button.danger:hover{background:#fbe3e3}
 
 /* ---- small screens: the sidebar becomes a scrolling bar on top ---- */
 @media (max-width:980px){

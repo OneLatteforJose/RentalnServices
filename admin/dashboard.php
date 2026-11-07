@@ -62,12 +62,12 @@ $p = $roles['provider'] ?? ['total' => 0, 'active' => 0];
 $pb = $cnt($book, 'pending');
 $pr = $cnt($req, 'pending');
 echo '<div class="stats">'
-   . stat_card('user',      (int)$m['active'], 'Active managers',  'of ' . (int)$m['total'] . ' managers', false, 'accounts.php?role=manager')
-   . stat_card('briefcase', (int)$p['active'], 'Active providers', 'of ' . (int)$p['total'] . ' providers', false, 'accounts.php?role=provider')
+   . stat_card('user',      (int)$m['active'], 'Active managers',  'of ' . plural((int)$m['total'], 'manager'), false, 'accounts.php?role=manager')
+   . stat_card('briefcase', (int)$p['active'], 'Active providers', 'of ' . plural((int)$p['total'], 'provider'), false, 'accounts.php?role=provider')
    . stat_card('users',     (int)($roles['user']['total'] ?? 0), 'Overall users', 'customer accounts', false, 'accounts.php?role=user')
-   . stat_card('car',       (int)$veh['available'], 'Vehicles available', 'of ' . (int)$veh['total'] . ' vehicles', false, 'catalog.php?tab=vehicles')
-   . stat_card('wrench',    (int)$svc['available'], 'Services available', 'of ' . (int)$svc['total'] . ' services', false, 'catalog.php?tab=services')
-   . stat_card('calendar',  $pb + $pr, 'Pending approval', $pb . ' bookings, ' . $pr . ' requests', true, 'activity.php?tab=' . ($pb === 0 && $pr > 0 ? 'requests' : 'bookings') . '&status=pending')
+   . stat_card('car',       (int)$veh['available'], 'Vehicles available', 'of ' . plural((int)$veh['total'], 'vehicle'), false, 'catalog.php?tab=vehicles')
+   . stat_card('wrench',    (int)$svc['available'], 'Services available', 'of ' . plural((int)$svc['total'], 'service'), false, 'catalog.php?tab=services')
+   . stat_card('calendar',  $pb + $pr, 'Pending approval', plural($pb, 'booking') . ', ' . plural($pr, 'request'), true, 'activity.php?tab=' . ($pb === 0 && $pr > 0 ? 'requests' : 'bookings') . '&status=pending')
    . '</div>';
 ?>
 <div class="two">

@@ -35,36 +35,29 @@ function pending_counts(): array {
     }
 }
 
-function page_header(string $title, string $active = ''): void {
-    $nav = [
-        'dashboard.php' => ['Dashboard',           'home'],
-        'accounts.php'  => ['Accounts',            'user'],
-        'partners.php'  => ['Partnerships',        'users'],
-        'catalog.php'   => ['Vehicles & Services', 'car'],
-        'activity.php'  => ['Activity',            'calendar'],
-        'reports.php'   => ['Reports',             'chart'],
-        'areas.php'     => ['Areas',               'pin'],
-        'logs.php'      => ['Admin Log',           'file'],
-    ];
-    $name = trim((string)($_SESSION['user']['name'] ?? 'Admin')) ?: 'Admin';
+// The shared sidebar + top bar. $nav maps file => [label, icon]. $o: suffix (title tag), name, bell (count),
+// bellHref, bellLabel, city (optional line shown in the top bar). Used by the admin and the manager sides.
+function shell_header(string $title, string $active, array $nav, array $o): void {
+    $name = trim((string)($o['name'] ?? '')) ?: 'User';
     $initial = strtoupper(function_exists('mb_substr') ? mb_substr($name, 0, 1) : substr($name, 0, 1));
-    [$pb, $pr] = pending_counts();
-    $bell = $pb + $pr;
-    $bellHref = 'activity.php?tab=' . ($pb === 0 && $pr > 0 ? 'requests' : 'bookings') . '&status=pending';
+    $bell = (int)($o['bell'] ?? 0);
 
     echo '<!doctype html><html lang="en"><head><meta charset="utf-8">'
        . '<meta name="viewport" content="width=device-width,initial-scale=1">'
-       . '<title>' . e($title) . ' - ' . e(ADMIN_BRAND) . '</title>'
+       . '<title>' . e($title) . ' - ' . e(ADMIN_BRAND) . ' ' . e($o['suffix'] ?? '') . '</title>'
        . '<link rel="stylesheet" href="../assets/style.css"></head><body><div class="app">'
        . '<aside class="sidebar"><a class="brand" href="dashboard.php">'
        . '<svg viewBox="0 0 32 32" aria-hidden="true"><path d="M16 2C10.5 2 6 6.4 6 11.8 6 19 16 30 16 30s10-11 10-18.2C26 6.4 21.5 2 16 2z" fill="#f5b81c"/><circle cx="16" cy="12" r="4.2" fill="#0f5c3b"/></svg>'
-       . '<span><b>' . e(ADMIN_BRAND) . '</b><small>' . e(ADMIN_BRAND_LONG) . '</small></span></a><nav aria-label="Admin">';
+       . '<span><b>' . e(ADMIN_BRAND) . '</b><small>' . e(ADMIN_BRAND_LONG) . '</small></span></a><nav aria-label="Main">';
     foreach ($nav as $file => [$label, $ic]) {
         echo '<a href="' . $file . '"' . ($active === $file ? ' class="on" aria-current="page"' : '') . '>' . icon($ic) . '<span>' . e($label) . '</span></a>';
     }
-    echo '</nav></aside><div class="main"><header class="topbar">'
-       . '<span class="welcome">Welcome back, <b>' . e($name) . '</b>!</span>'
-       . '<a class="bell" href="' . $bellHref . '" aria-label="' . $bell . ' pending approvals">' . icon('bell')
+    echo '</nav></aside><div class="main"><header class="topbar">';
+    if (!empty($o['city'])) {
+        echo '<span class="cityline">' . icon('pin') . e($o['city']) . '</span>';
+    }
+    echo '<span class="welcome">Welcome back, <b>' . e($name) . '</b>!</span>'
+       . '<a class="bell" href="' . e($o['bellHref'] ?? '#') . '" aria-label="' . $bell . ' ' . e($o['bellLabel'] ?? 'pending approvals') . '">' . icon('bell')
        . ($bell > 0 ? '<span class="dot">' . ($bell > 99 ? '99+' : $bell) . '</span>' : '') . '</a>'
        . '<details class="user"><summary><span class="avatar">' . e($initial) . '</span><span class="uname">' . e($name) . '</span>' . icon('chevron') . '</summary>'
        . '<div class="menu"><a href="profile.php">Profile</a><a href="../logout.php">Log out</a></div></details>'
@@ -73,6 +66,25 @@ function page_header(string $title, string $active = ''): void {
         echo '<p class="flash">' . e($_SESSION['flash']) . '</p>';
         unset($_SESSION['flash']);
     }
+}
+
+function page_header(string $title, string $active = ''): void {
+    [$pb, $pr] = pending_counts();
+    shell_header($title, $active, [
+        'dashboard.php' => ['Dashboard',           'home'],
+        'accounts.php'  => ['Accounts',            'user'],
+        'partners.php'  => ['Partnerships',        'users'],
+        'catalog.php'   => ['Vehicles & Services', 'car'],
+        'activity.php'  => ['Activity',            'calendar'],
+        'reports.php'   => ['Reports',             'chart'],
+        'areas.php'     => ['Areas',               'pin'],
+        'logs.php'      => ['Admin Log',           'file'],
+    ], [
+        'suffix'   => 'Admin',
+        'name'     => $_SESSION['user']['name'] ?? 'Admin',
+        'bell'     => $pb + $pr,
+        'bellHref' => 'activity.php?tab=' . ($pb === 0 && $pr > 0 ? 'requests' : 'bookings') . '&status=pending',
+    ]);
 }
 
 function page_footer(): void {
@@ -85,6 +97,11 @@ function stat_card(string $ic, $value, string $label, string $sub = '', bool $ho
            . '<span class="lbl">' . e($label) . '</span>' . ($sub !== '' ? '<br><span class="sub">' . e($sub) . '</span>' : '') . '</span>';
     $cls = 'stat' . ($hot ? ' hot' : '');
     return $href !== '' ? '<a class="' . $cls . '" href="' . e($href) . '">' . $inner . '</a>' : '<div class="' . $cls . '">' . $inner . '</div>';
+}
+
+// "1 booking" / "2 bookings"
+function plural(int $n, string $one, ?string $many = null): string {
+    return $n . ' ' . ($n === 1 ? $one : ($many ?? $one . 's'));
 }
 
 function peso($n): string {

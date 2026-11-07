@@ -4,7 +4,7 @@ A web system where users book vehicles (cars, vans, trucks, with or without a dr
 (handyman, plumbing, cleaning, electrical, beauty, laundry, gardening, driver, body massage).
 Each city or municipality has a manager who approves bookings and requests. Providers own the vehicles and do the services.
 
-**Status:** the admin side, the public landing page and customer sign-up/sign-in are built. Booking and service requests, and the manager and provider sides, are not.
+**Status:** the admin side, the manager side, the public landing page and customer sign-up/sign-in are built. Booking and service requests (the customer forms) and the provider side are not.
 
 ## Setup (XAMPP)
 
@@ -16,7 +16,7 @@ Each city or municipality has a manager who approves bookings and requests. Prov
    ```
    C:\xampp\php\php.exe create_admin.php "Your Name" you@example.com "a-strong-password"
    ```
-5. Open <http://localhost/RentalnServices/>. Admins log in at the bottom of the page. Customers use **Sign up** (`register.php`) to create an account.
+5. Open <http://localhost/RentalnServices/>. Admins and managers log in at the bottom of the page (each lands on their own dashboard). Customers use **Sign up** (`register.php`) to create an account.
 
 Database settings default to `localhost`, port `3306`, user `root`, no password.
 To change them, copy `config.example.php` to `config.local.php` and edit it. `config.local.php` is git-ignored.
@@ -33,7 +33,7 @@ A barangay or city that is still in use cannot be removed.
 
 | Page | What it does |
 | --- | --- |
-| `dashboard.php` | Totals, approvals waiting, cities without a manager, latest bookings |
+| `dashboard.php` | Totals, approvals waiting, cities without a manager, recent activity |
 | `accounts.php`, `account.php` | List, search, add managers and providers; edit details, reset password, activate or deactivate |
 | `partners.php` | Managers and providers overview |
 | `catalog.php` | Review every vehicle and service |
@@ -43,18 +43,37 @@ A barangay or city that is still in use cannot be removed.
 | `logs.php` | Record of admin actions (passwords are never logged) |
 | `profile.php` | Change your own password |
 
+## Manager pages (`/manager`)
+
+A manager only ever sees and changes rows in their own city. Anything in another city is treated as not found.
+Admins create manager and provider accounts (a manager needs a barangay, which decides the city they cover).
+
+| Page | What it does |
+| --- | --- |
+| `dashboard.php` | Approvals waiting, what starts this week, vehicles/services/providers in the city |
+| `approvals.php` | Queue of vehicle bookings and service requests, filtered by status |
+| `booking.php`, `request.php` | Approve, reject (optional note goes to the admin log) or mark completed. Approving a booking checks for date clashes on the same vehicle and assigns a driver when one is needed |
+| `vehicles.php` | Add and edit vehicles for providers in the city |
+| `services.php` | Add and edit services for providers in the city |
+| `providers.php` | Providers who live in the city, with their vehicle and service counts |
+| `profile.php` | Change your own password |
+
+Rules enforced: a vehicle cannot be approved for overlapping dates; a vehicle or service cannot be marked unavailable while it
+has pending or upcoming approved bookings or requests; a booking or request can only be completed after its start time.
+
 ## Project layout
 
 ```
 index.php            public landing page
 register.php         customer sign-up (always creates a customer account)
 home.php             a signed-in customer's account page
-login.php            sign-in for admins and customers
+login.php            sign-in for admins, managers and customers
 logout.php
 create_admin.php     one-time command-line script
 booking_and_services.sql   database
 config.example.php
 admin/               the admin side
-includes/            db, auth, layout, areas, reports, public site helpers
-assets/              style.css (admin), landing.css (public)
+manager/             the manager side
+includes/            db, auth, layout, areas, reports, manager helpers, public site helpers
+assets/              style.css (admin and manager), landing.css (public)
 ```
