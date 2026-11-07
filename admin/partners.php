@@ -37,7 +37,7 @@ $managers = $pdo->query(
      LIMIT {$mp['per']} OFFSET {$mp['offset']}"
 )->fetchAll();
 
-page_header('Partnerships', 'partners.php');
+page_header('Partnerships', 'partners.php', ['actions' => '<a class="btn-soft" href="recommendations.php">Recommendations</a>']);
 echo '<h2>Managers</h2>';
 render_table(
     ['full_name' => 'Manager', 'city' => 'City / Municipality', 'province' => 'Province', 'providers' => 'Providers in city',

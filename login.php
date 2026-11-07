@@ -1,8 +1,8 @@
 <?php
 require_once __DIR__ . '/includes/site.php';
 
-$landing = ['admin' => 'admin/dashboard.php', 'manager' => 'manager/dashboard.php', 'user' => 'home.php'];
 $signedInAs = $_SESSION['user']['role'] ?? '';
+$landing = ['admin' => 'admin/dashboard.php', 'manager' => 'manager/dashboard.php', 'user' => 'home.php'];
 if (isset($landing[$signedInAs])) {
     header('Location: ' . $landing[$signedInAs]);
     exit;
@@ -14,15 +14,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $st = db()->prepare("SELECT id, role, full_name, password_hash FROM users WHERE email = ? AND is_active = 1");
     $st->execute([trim($_POST['email'] ?? '')]);
     $user = $st->fetch();
-    // Admins, managers and customers can sign in so far; provider sign-in comes with its own side.
+    // Admins and customers can sign in so far; manager and provider sign-in comes with their own sides.
     if ($user && password_verify($_POST['password'] ?? '', $user['password_hash'])) {
-        if (isset($landing[$user['role']])) {
+        if ($user['role'] === 'admin') {
             session_regenerate_id(true);
-            $_SESSION['user'] = ['id' => (int)$user['id'], 'role' => $user['role'], 'name' => $user['full_name']];
-            if ($user['role'] !== 'user') {
-                log_action('login', 'user', (int)$user['id'], ucfirst($user['role']) . ' signed in');
-            }
-            header('Location: ' . $landing[$user['role']]);
+            $_SESSION['user'] = ['id' => (int)$user['id'], 'role' => 'admin', 'name' => $user['full_name']];
+            log_action('login', 'user', (int)$user['id'], 'Admin signed in');
+            header('Location: admin/dashboard.php');
+            exit;
+        }
+        if ($user['role'] === 'user') {
+            session_regenerate_id(true);
+            $_SESSION['user'] = ['id' => (int)$user['id'], 'role' => 'user', 'name' => $user['full_name']];
+            header('Location: home.php');
+            exit;
+        }
+        if ($user['role'] === 'manager') {
+            session_regenerate_id(true);
+            $_SESSION['user'] = ['id' => (int)$user['id'], 'role' => 'manager', 'name' => $user['full_name']];
+            header('Location: manager/dashboard.php');
             exit;
         }
         $error = 'Sign-in for ' . $user['role'] . ' accounts is not available yet.';

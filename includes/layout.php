@@ -1,121 +1,168 @@
 <?php
-defined('ADMIN_BRAND') || define('ADMIN_BRAND', 'OSAS');
-defined('ADMIN_BRAND_LONG') || define('ADMIN_BRAND_LONG', 'Online Sakay at Serbisyo');
-
-// Inline line icons (24x24, drawn with currentColor) so the theme needs no icon font or image files.
-function icon(string $name): string {
-    static $paths = [
-        'home'     => '<path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/>',
-        'user'     => '<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>',
-        'users'    => '<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>',
-        'user-plus'=> '<path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/>',
-        'car'      => '<path d="M3 13l2-5a2 2 0 0 1 1.9-1.3h10.2A2 2 0 0 1 19 8l2 5v4a1 1 0 0 1-1 1h-1v1.5h-2V18H7v1.5H5V18H4a1 1 0 0 1-1-1z"/><circle cx="7.5" cy="14.5" r="1"/><circle cx="16.5" cy="14.5" r="1"/>',
-        'calendar' => '<rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>',
-        'chart'    => '<line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>',
-        'pin'      => '<path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/>',
-        'file'     => '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>',
-        'briefcase'=> '<rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/>',
-        'wrench'   => '<path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94z"/>',
-        'bell'     => '<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>',
-        'chevron'  => '<polyline points="6 9 12 15 18 9"/>',
-    ];
-    return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' . ($paths[$name] ?? '') . '</svg>';
+if (!defined('ADMIN_BRAND')) {
+    define('ADMIN_BRAND', 'OSAS');
+    define('ADMIN_TAGLINE', 'Online Sakay at Serbisyo');
 }
 
-// Waiting approvals for the bell badge: [bookings, requests]. Two indexed COUNTs; never breaks a page if the query fails.
-function pending_counts(): array {
+// Small stroke icons used by the sidebar and the dashboard.
+function icon(string $name): string {
+    static $p = [
+        'home'     => '<path d="M3 11l9-8 9 8v10a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1z"/>',
+        'user'     => '<circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/>',
+        'users'    => '<circle cx="9" cy="8" r="3.5"/><path d="M2 21c0-3.5 3-5.5 7-5.5s7 2 7 5.5"/><circle cx="17" cy="9" r="2.5"/><path d="M17 14.5c3 0 5 1.8 5 4.5"/>',
+        'car'      => '<path d="M3 13l2-6h14l2 6v5H3z"/><circle cx="7.5" cy="18" r="1.3"/><circle cx="16.5" cy="18" r="1.3"/><path d="M3 13h18"/>',
+        'calendar' => '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/>',
+        'chart'    => '<path d="M5 21V10M12 21V4M19 21v-7"/>',
+        'pin'      => '<path d="M12 21s7-6.2 7-11a7 7 0 0 0-14 0c0 4.8 7 11 7 11z"/><circle cx="12" cy="10" r="2.5"/>',
+        'log'      => '<path d="M6 3h12v18H6z"/><path d="M9 8h6M9 12h6M9 16h4"/>',
+        'bell'     => '<path d="M6 9a6 6 0 0 1 12 0c0 6 2 7 2 7H4s2-1 2-7z"/><path d="M10 20a2 2 0 0 0 4 0"/>',
+        'wallet'   => '<path d="M3 7h16a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M3 7l12-3v3"/><circle cx="16.5" cy="13.5" r="1.2"/>',
+        'briefcase'=> '<rect x="3" y="7" width="18" height="13" rx="2"/><path d="M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2M3 13h18"/>',
+        'userplus' => '<circle cx="10" cy="8" r="4"/><path d="M2 21c0-4 4-6 8-6s6 1.2 7 3"/><path d="M19 8v6M16 11h6"/>',
+        'wrench'   => '<path d="M14.5 6.5a4 4 0 0 0 4.9 4.9L21 13l-3 3-1.6-1.6a4 4 0 0 0-1.1.7L8 21l-3-3 5.9-6.3a4 4 0 0 0 .7-1.1L9.9 9.1l3-3z"/>',
+        'chev'     => '<path d="M6 9l6 6 6-6"/>',
+    ];
+    return '<svg viewBox="0 0 24 24" aria-hidden="true">' . ($p[$name] ?? '') . '</svg>';
+}
+
+// Things the admin should act on: shown in the bell on every admin page.
+// Each item is [text, link, count].
+function attention_items(): array {
+    static $items = null;
+    if ($items !== null) {
+        return $items;
+    }
+    $items = [];
     try {
         $pdo = db();
-        return [
-            (int)$pdo->query("SELECT COUNT(*) FROM bookings WHERE status = 'pending'")->fetchColumn(),
-            (int)$pdo->query("SELECT COUNT(*) FROM service_requests WHERE status = 'pending'")->fetchColumn(),
-        ];
-    } catch (Throwable $ex) {
-        return [0, 0];
+        $b = (int)$pdo->query("SELECT COUNT(*) FROM bookings WHERE status = 'pending'")->fetchColumn();
+        $r = (int)$pdo->query("SELECT COUNT(*) FROM service_requests WHERE status = 'pending'")->fetchColumn();
+        $n = (int)$pdo->query(
+            "SELECT COUNT(*) FROM (
+                SELECT a.province, a.city_municipality FROM areas a
+                LEFT JOIN (SELECT DISTINCT ma.province, ma.city_municipality
+                           FROM users u JOIN areas ma ON ma.id = u.area_id
+                           WHERE u.role = 'manager' AND u.is_active = 1) m
+                       ON m.province = a.province AND m.city_municipality = a.city_municipality
+                WHERE m.province IS NULL GROUP BY a.province, a.city_municipality) t"
+        )->fetchColumn();
+        try {
+            $rc = (int)$pdo->query("SELECT COUNT(*) FROM provider_recommendations WHERE status = 'pending'")->fetchColumn();
+            if ($rc) $items[] = [$rc . ($rc === 1 ? ' provider recommendation' : ' provider recommendations') . ' to review', 'recommendations.php', $rc];
+        } catch (Throwable $e) {
+            // the recommendations table is added by migrations/001_provider_recommendations.sql
+        }
+        if ($b) $items[] = [$b . ($b === 1 ? ' booking' : ' bookings') . ' awaiting approval', 'activity.php?tab=bookings&status=pending', $b];
+        if ($r) $items[] = [$r . ($r === 1 ? ' service request' : ' service requests') . ' awaiting approval', 'activity.php?tab=requests&status=pending', $r];
+        if ($n) $items[] = [$n . ($n === 1 ? ' city has' : ' cities have') . ' no manager', 'areas.php', $n];
+    } catch (Throwable $e) {
+        // the bell is a convenience; never break a page because of it
     }
+    return $items;
 }
 
-// The shared sidebar + top bar. $nav maps file => [label, icon]. $o: suffix (title tag), name, bell (count),
-// bellHref, bellLabel, city (optional line shown in the top bar). Used by the admin and the manager sides.
-function shell_header(string $title, string $active, array $nav, array $o): void {
-    $name = trim((string)($o['name'] ?? '')) ?: 'User';
-    $initial = strtoupper(function_exists('mb_substr') ? mb_substr($name, 0, 1) : substr($name, 0, 1));
-    $bell = (int)($o['bell'] ?? 0);
+// $opts: 'welcome' => true shows "Welcome back, name!" beside the bell, 'subtitle' => text under the title,
+//        'actions' => trusted HTML shown on the right of the title.
+function page_header(string $title, string $active = '', array $opts = []): void {
+    $nav = [
+        'dashboard.php' => ['Dashboard', 'home'],
+        'accounts.php'  => ['Accounts', 'user'],
+        'partners.php'  => ['Partnerships', 'users'],
+        'catalog.php'   => ['Vehicles & Services', 'car'],
+        'activity.php'  => ['Activity', 'calendar'],
+        'reports.php'   => ['Reports', 'chart'],
+        'areas.php'     => ['Areas', 'pin'],
+        'logs.php'      => ['Admin Log', 'log'],
+    ];
+    $nav   = $opts['nav'] ?? $nav;
+    $label = (string)($opts['label'] ?? 'Admin');
+    $name  = (string)($_SESSION['user']['name'] ?? $label);
+    $first = function_exists('mb_substr') ? mb_strtoupper(mb_substr($name, 0, 1)) : strtoupper(substr($name, 0, 1));
+    $items = $opts['attention'] ?? attention_items();
+    $badge = array_sum(array_column($items, 2));
+    ?>
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title><?= e($title) ?> - <?= e(ADMIN_BRAND) ?> <?= e($label) ?></title>
+<link rel="stylesheet" href="../assets/style.css"></head>
+<body>
+<div class="app">
+  <aside class="side">
+    <a class="brand" href="dashboard.php" aria-label="<?= e(ADMIN_BRAND) ?> dashboard">
+      <svg viewBox="0 0 48 48" width="42" height="42" aria-hidden="true"><path d="M24 3c-8 0-14 6-14 14 0 10 14 26 14 26s14-16 14-26c0-8-6-14-14-14z" fill="#f5c542"/><circle cx="24" cy="17" r="5.5" fill="#0e5a37"/><path d="M6 45c11-7 25-7 36 0" stroke="#7cc68a" stroke-width="3" fill="none" stroke-linecap="round"/></svg>
+      <span><strong><?= e(ADMIN_BRAND) ?></strong><small><?= e(ADMIN_TAGLINE) ?></small></span>
+    </a>
+    <nav aria-label="<?= e($label) ?>">
+      <?php foreach ($nav as $file => [$label, $ic]): ?>
+        <a href="<?= $file ?>"<?= $active === $file ? ' class="on" aria-current="page"' : '' ?>><?= icon($ic) ?><span><?= e($label) ?></span></a>
+      <?php endforeach; ?>
+    </nav>
+    <svg class="road" viewBox="0 0 200 120" aria-hidden="true"><path d="M-10 125C40 90 110 100 210 40" /><path d="M-10 105C45 75 115 80 210 25" /></svg>
+  </aside>
 
-    echo '<!doctype html><html lang="en"><head><meta charset="utf-8">'
-       . '<meta name="viewport" content="width=device-width,initial-scale=1">'
-       . '<title>' . e($title) . ' - ' . e(ADMIN_BRAND) . ' ' . e($o['suffix'] ?? '') . '</title>'
-       . '<link rel="stylesheet" href="../assets/style.css"></head><body><div class="app">'
-       . '<aside class="sidebar"><a class="brand" href="dashboard.php">'
-       . '<svg viewBox="0 0 32 32" aria-hidden="true"><path d="M16 2C10.5 2 6 6.4 6 11.8 6 19 16 30 16 30s10-11 10-18.2C26 6.4 21.5 2 16 2z" fill="#f5b81c"/><circle cx="16" cy="12" r="4.2" fill="#0f5c3b"/></svg>'
-       . '<span><b>' . e(ADMIN_BRAND) . '</b><small>' . e(ADMIN_BRAND_LONG) . '</small></span></a><nav aria-label="Main">';
-    foreach ($nav as $file => [$label, $ic]) {
-        echo '<a href="' . $file . '"' . ($active === $file ? ' class="on" aria-current="page"' : '') . '>' . icon($ic) . '<span>' . e($label) . '</span></a>';
-    }
-    echo '</nav></aside><div class="main"><header class="topbar">';
-    if (!empty($o['city'])) {
-        echo '<span class="cityline">' . icon('pin') . e($o['city']) . '</span>';
-    }
-    echo '<span class="welcome">Welcome back, <b>' . e($name) . '</b>!</span>'
-       . '<a class="bell" href="' . e($o['bellHref'] ?? '#') . '" aria-label="' . $bell . ' ' . e($o['bellLabel'] ?? 'pending approvals') . '">' . icon('bell')
-       . ($bell > 0 ? '<span class="dot">' . ($bell > 99 ? '99+' : $bell) . '</span>' : '') . '</a>'
-       . '<details class="user"><summary><span class="avatar">' . e($initial) . '</span><span class="uname">' . e($name) . '</span>' . icon('chevron') . '</summary>'
-       . '<div class="menu"><a href="profile.php">Profile</a><a href="../logout.php">Log out</a></div></details>'
-       . '</header><main class="content"><h1>' . e($title) . '</h1>';
+  <div class="content">
+    <div class="bar">
+      <?php if (!empty($opts['welcome'])): ?><span class="welcome">Welcome back, <strong><?= e($name) ?></strong>!</span><?php endif; ?>
+      <details class="menu">
+        <summary class="bell" aria-label="Needs attention"><?= icon('bell') ?><?php if ($badge): ?><b><?= $badge > 99 ? '99+' : (int)$badge ?></b><?php endif; ?></summary>
+        <div class="pop">
+          <p class="pop-h">Needs attention</p>
+          <?php if (!$items): ?>
+            <p class="muted pop-empty">All clear. Nothing is waiting.</p>
+          <?php else: foreach ($items as [$text, $href]): ?>
+            <a href="<?= e($href) ?>"><?= e($text) ?></a>
+          <?php endforeach; endif; ?>
+        </div>
+      </details>
+      <details class="menu">
+        <summary class="me"><span class="av"><?= e($first) ?></span><span class="who"><?= e($name) ?></span><?= icon('chev') ?></summary>
+        <div class="pop">
+          <a href="profile.php">My profile</a>
+          <a href="../logout.php">Log out</a>
+        </div>
+      </details>
+    </div>
+
+    <main class="page">
+      <div class="pagehead">
+        <div>
+          <h1><?= e($title) ?></h1>
+          <?php if (!empty($opts['subtitle'])): ?><p class="sub"><?= e($opts['subtitle']) ?></p><?php endif; ?>
+        </div>
+        <?php if (!empty($opts['actions'])) echo $opts['actions']; ?>
+      </div>
+<?php
     if (!empty($_SESSION['flash'])) {
         echo '<p class="flash">' . e($_SESSION['flash']) . '</p>';
         unset($_SESSION['flash']);
     }
 }
 
-function page_header(string $title, string $active = ''): void {
-    [$pb, $pr] = pending_counts();
-    shell_header($title, $active, [
-        'dashboard.php' => ['Dashboard',           'home'],
-        'accounts.php'  => ['Accounts',            'user'],
-        'partners.php'  => ['Partnerships',        'users'],
-        'catalog.php'   => ['Vehicles & Services', 'car'],
-        'activity.php'  => ['Activity',            'calendar'],
-        'reports.php'   => ['Reports',             'chart'],
-        'areas.php'     => ['Areas',               'pin'],
-        'logs.php'      => ['Admin Log',           'file'],
-    ], [
-        'suffix'   => 'Admin',
-        'name'     => $_SESSION['user']['name'] ?? 'Admin',
-        'bell'     => $pb + $pr,
-        'bellHref' => 'activity.php?tab=' . ($pb === 0 && $pr > 0 ? 'requests' : 'bookings') . '&status=pending',
-    ]);
-}
-
 function page_footer(): void {
-    echo '</main></div></div></body></html>';
-}
-
-// A stat card with an icon circle (dashboard). $hot gives it the gold "needs attention" outline.
-function stat_card(string $ic, $value, string $label, string $sub = '', bool $hot = false, string $href = ''): string {
-    $inner = '<span class="ic">' . icon($ic) . '</span><span><span class="num">' . e($value) . '</span><br>'
-           . '<span class="lbl">' . e($label) . '</span>' . ($sub !== '' ? '<br><span class="sub">' . e($sub) . '</span>' : '') . '</span>';
-    $cls = 'stat' . ($hot ? ' hot' : '');
-    return $href !== '' ? '<a class="' . $cls . '" href="' . e($href) . '">' . $inner . '</a>' : '<div class="' . $cls . '">' . $inner . '</div>';
-}
-
-// "1 booking" / "2 bookings"
-function plural(int $n, string $one, ?string $many = null): string {
-    return $n . ' ' . ($n === 1 ? $one : ($many ?? $one . 's'));
-}
-
-function peso($n): string {
-    $n = (float)$n;
-    return "\u{20B1}" . number_format($n, fmod($n, 1.0) == 0.0 ? 0 : 2);
-}
-
-// "5m ago" from an age in seconds.
-function time_ago(int $seconds): string {
-    if ($seconds < 60)    return 'just now';
-    if ($seconds < 3600)  return intdiv($seconds, 60) . 'm ago';
-    if ($seconds < 86400) return intdiv($seconds, 3600) . 'h ago';
-    if ($seconds < 86400 * 30) return intdiv($seconds, 86400) . 'd ago';
-    return intdiv($seconds, 86400 * 30) . 'mo ago';
+    ?>
+    </main>
+  </div>
+</div>
+<script>
+// Dropdown menus: close when clicking elsewhere or pressing Escape; opening one closes the others.
+(function () {
+  var menus = document.querySelectorAll('details.menu');
+  document.addEventListener('click', function (ev) {
+    menus.forEach(function (m) { if (!m.contains(ev.target)) m.removeAttribute('open'); });
+  });
+  document.addEventListener('keydown', function (ev) {
+    if (ev.key === 'Escape') menus.forEach(function (m) { m.removeAttribute('open'); });
+  });
+  menus.forEach(function (m) {
+    m.addEventListener('toggle', function () {
+      if (m.open) menus.forEach(function (o) { if (o !== m) o.removeAttribute('open'); });
+    });
+  });
+})();
+</script>
+</body></html>
+<?php
 }
 
 // Simple escaped table. $rows is a list of associative arrays; $headers maps column key => label.
@@ -134,9 +181,6 @@ function render_table(array $headers, array $rows, array $links = []): void {
         echo '<tr>';
         foreach ($headers as $key => $_) {
             $cell = e($row[$key] ?? '');
-            if ($key === 'status' && $cell !== '') {
-                $cell = '<span class="badge badge-' . preg_replace('/[^a-z]/', '', strtolower((string)$row[$key])) . '">' . $cell . '</span>';
-            }
             if (isset($links[$key]) && ($href = $links[$key]($row))) {
                 $cell = '<a href="' . e($href) . '">' . $cell . '</a>';
             }

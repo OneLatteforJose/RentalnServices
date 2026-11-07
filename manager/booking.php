@@ -2,189 +2,182 @@
 require_once __DIR__ . '/../includes/manager.php';
 $m = require_manager();
 $pdo = db();
-$id = (int)($_GET['id'] ?? $_POST['id'] ?? 0);
-[$cond, $cp] = city_filter($m['key'], 'a');
+$cp = city_params($m);
 
-// The booking, only if its area is in this manager's city. $lock = SELECT ... FOR UPDATE inside a transaction.
-$load = function (bool $lock = false) use ($pdo, $id, $cond, $cp) {
+$id = (int)($_GET['id'] ?? $_POST['id'] ?? 0);
+$load = function () use ($pdo, $cp, $id) {
     $st = $pdo->prepare(
-        "SELECT b.*, v.status AS vehicle_status, v.own_driver_id
-         FROM bookings b JOIN vehicles v ON v.id = b.vehicle_id JOIN areas a ON a.id = b.area_id
-         WHERE b.id = ?$cond" . ($lock ? ' FOR UPDATE' : '')
+        "SELECT b.*, u.full_name AS customer, u.email AS customer_email, u.phone AS customer_phone, u.street AS customer_street,
+                ub.barangay AS customer_barangay, ub.city_municipality AS customer_city,
+                v.type, v.model, v.plate_no, v.rate_per_day, v.status AS vehicle_status, v.own_driver_id,
+                p.full_name AS provider, p.phone AS provider_phone,
+                ds.title AS driver_title, dp.full_name AS driver_name
+         FROM bookings b
+         JOIN areas ca ON ca.id = b.area_id
+         JOIN users u ON u.id = b.user_id
+         LEFT JOIN areas ub ON ub.id = u.area_id
+         JOIN vehicles v ON v.id = b.vehicle_id
+         JOIN users p ON p.id = v.provider_id
+         LEFT JOIN services ds ON ds.id = b.driver_service_id
+         LEFT JOIN users dp ON dp.id = ds.provider_id
+         WHERE b.id = ? AND ca.province = ? AND ca.city_municipality = ?"
     );
     $st->execute(array_merge([$id], $cp));
     return $st->fetch();
 };
-if (!$load()) {
-    flash('That booking was not found in your city.');
+$b = $load();
+if (!$b) {
+    flash('Booking not found in your city.');
     header('Location: approvals.php');
     exit;
 }
+
+// Driver choices: available driver services in this city, plus the vehicle's own driver.
+$ds = $pdo->prepare(
+    "SELECT s.id, s.title, p.full_name FROM services s JOIN users p ON p.id = s.provider_id JOIN areas sa ON sa.id = s.area_id
+     WHERE s.category = 'driver' AND s.status = 'available' AND ((sa.province = ? AND sa.city_municipality = ?) OR s.id = ?)
+     ORDER BY (s.id = ?) DESC, p.full_name"
+);
+$ds->execute(array_merge($cp, [(int)$b['own_driver_id'], (int)$b['own_driver_id']]));
+$drivers = $ds->fetchAll();
+$validDriver = array_column($drivers, 'id');
+
+$overlap = function (string $col, int $value) use ($pdo, $id, $b): bool {
+    $st = $pdo->prepare("SELECT 1 FROM bookings WHERE $col = ? AND id <> ? AND status = 'approved' AND start_at < ? AND end_at > ? LIMIT 1");
+    $st->execute([$value, $id, $b['end_at'], $b['start_at']]);
+    return (bool)$st->fetchColumn();
+};
 
 $err = '';
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     csrf_check();
     $action = $_POST['action'] ?? '';
-    $pdo->beginTransaction();
-    $b = $load(true);      // locks the booking and its vehicle row, so two managers' clicks cannot both win
-    $done = '';
-    if (!$b) {
-        $err = 'That booking was not found in your city.';
-    } elseif ($action === 'approve') {
-        if ($b['status'] !== 'pending') {
-            $err = 'Only pending bookings can be approved.';
-        } elseif ($b['vehicle_status'] === 'unavailable') {
-            $err = 'This vehicle is marked unavailable. Change its status on the Vehicles page first.';
-        } elseif ($clash = db_value($pdo, "SELECT id FROM bookings WHERE vehicle_id = ? AND status = 'approved' AND id <> ? AND start_at < ? AND end_at > ? LIMIT 1",
-                                    [$b['vehicle_id'], $id, $b['end_at'], $b['start_at']])) {
-            $err = "These dates overlap approved booking #$clash for the same vehicle.";
-        } else {
-            $driver = $b['driver_service_id'] ? (int)$b['driver_service_id'] : null;
-            if ($b['with_driver'] && !$driver) {
-                if ($b['own_driver_id']) {
-                    $driver = (int)$b['own_driver_id'];   // the vehicle comes with its own driver
-                } else {
-                    $driver = (int)($_POST['driver_service_id'] ?? 0);
-                    $ok = $driver && db_value($pdo,
-                        "SELECT 1 FROM services s JOIN areas a ON a.id = s.area_id WHERE s.id = ? AND s.category = 'driver' AND s.status = 'available'$cond",
-                        array_merge([$driver], $cp));
-                    if (!$ok) $err = 'Choose an available driver from your city for this booking.';
+
+    if ($action === 'approve') {
+        $driver = (int)($_POST['driver_service_id'] ?? 0) ?: ((int)$b['driver_service_id'] ?: null);
+        try {
+            $pdo->beginTransaction();
+            // lock the vehicle first, so two managers/tabs cannot approve overlapping bookings together
+            $pdo->prepare("SELECT id FROM vehicles WHERE id = ? FOR UPDATE")->execute([$b['vehicle_id']]);
+            $cur = $pdo->prepare("SELECT status FROM bookings WHERE id = ? FOR UPDATE");
+            $cur->execute([$id]);
+            if ($cur->fetchColumn() !== 'pending') {
+                $err = 'This booking is no longer pending.';
+            } elseif ($b['vehicle_status'] === 'unavailable') {
+                $err = 'This vehicle is marked unavailable. Make it available first, or reject the booking.';
+            } elseif ($overlap('vehicle_id', (int)$b['vehicle_id'])) {
+                $err = 'This vehicle already has an approved booking that overlaps these dates.';
+            } elseif ($b['with_driver'] && (!$driver || !in_array($driver, array_map('intval', $validDriver), true))) {
+                $err = 'Choose a driver for this booking.';
+            } elseif ($b['with_driver'] && $overlap('driver_service_id', $driver)) {
+                $err = 'That driver is already booked for these dates. Choose another driver.';
+            } else {
+                $pdo->prepare("UPDATE bookings SET status = 'approved', reviewed_by = ?, driver_service_id = ? WHERE id = ? AND status = 'pending'")
+                    ->execute([$m['id'], $b['with_driver'] ? $driver : null, $id]);
+                $pdo->commit();
+                log_action('booking.approve', 'booking', $id, 'Approved booking #' . $id);
+                flash('Booking approved.');
+                header('Location: booking.php?id=' . $id);
+                exit;
+            }
+            $pdo->rollBack();
+        } catch (PDOException $ex) {
+            if ($pdo->inTransaction()) $pdo->rollBack();
+            $err = 'Could not approve the booking. Please try again.';
+        }
+    }
+
+    if ($action === 'reject' || $action === 'complete') {
+        $from = $action === 'reject' ? 'pending' : 'approved';
+        $to   = $action === 'reject' ? 'rejected' : 'completed';
+        try {
+            $pdo->beginTransaction();
+            $upd = $pdo->prepare("UPDATE bookings SET status = ?, reviewed_by = COALESCE(reviewed_by, ?) WHERE id = ? AND status = ?");
+            $upd->execute([$to, $m['id'], $id, $from]);
+            if ($upd->rowCount() === 1) {
+                if ($action === 'reject') {   // the customer paid online, so a rejected booking is refunded
+                    $pdo->prepare("UPDATE payments SET status = 'refunded' WHERE booking_id = ? AND status = 'paid'")->execute([$id]);
                 }
+                $pdo->commit();
+                log_action('booking.' . $action, 'booking', $id, ucfirst($to) . ' booking #' . $id);
+                flash('Booking ' . $to . '.');
+                header('Location: booking.php?id=' . $id);
+                exit;
             }
-            if (!$err) {
-                $pdo->prepare("UPDATE bookings SET status = 'approved', reviewed_by = ?, driver_service_id = ? WHERE id = ?")->execute([$m['id'], $driver, $id]);
-                $done = "Booking #$id approved.";
-                log_action('booking.approve', 'booking', $id, "Approved booking #$id");
-            }
+            $pdo->rollBack();
+            $err = 'The booking changed in the meantime. Reload and try again.';
+        } catch (PDOException $ex) {
+            if ($pdo->inTransaction()) $pdo->rollBack();
+            $err = 'Could not update the booking.';
         }
-    } elseif ($action === 'reject') {
-        if ($b['status'] !== 'pending') {
-            $err = 'Only pending bookings can be rejected.';
-        } else {
-            $pdo->prepare("UPDATE bookings SET status = 'rejected', reviewed_by = ? WHERE id = ?")->execute([$m['id'], $id]);
-            $note = trim($_POST['note'] ?? '');
-            $done = "Booking #$id rejected.";
-            log_action('booking.reject', 'booking', $id, "Rejected booking #$id" . ($note !== '' ? ': ' . $note : ''));
-        }
-    } elseif ($action === 'complete') {
-        $st = $pdo->prepare("UPDATE bookings SET status = 'completed' WHERE id = ? AND status = 'approved' AND start_at <= NOW()");
-        $st->execute([$id]);
-        if ($st->rowCount()) {
-            $done = "Booking #$id marked completed.";
-            log_action('booking.complete', 'booking', $id, "Completed booking #$id");
-        } else {
-            $err = 'Only approved bookings that have already started can be completed.';
-        }
-    } else {
-        $err = 'Unknown action.';
     }
-    if ($done !== '') {
-        $pdo->commit();
-        flash($done);
-        header('Location: booking.php?id=' . $id);
-        exit;
-    }
-    $pdo->rollBack();
+    $b = $load() ?: $b;
 }
 
-$st = $pdo->prepare(
-    "SELECT b.*, u.full_name AS customer, u.email AS customer_email, u.phone AS customer_phone,
-            v.type, v.model, v.plate_no, v.rate_per_day, v.status AS vehicle_status, v.own_driver_id,
-            p.full_name AS provider, p.phone AS provider_phone,
-            va.barangay AS vehicle_barangay, a.barangay AS pickup_barangay,
-            ds.title AS driver_title, dp.full_name AS driver_provider, mg.full_name AS reviewer
-     FROM bookings b
-     JOIN users u ON u.id = b.user_id JOIN vehicles v ON v.id = b.vehicle_id JOIN users p ON p.id = v.provider_id
-     JOIN areas va ON va.id = v.area_id JOIN areas a ON a.id = b.area_id
-     LEFT JOIN services ds ON ds.id = b.driver_service_id LEFT JOIN users dp ON dp.id = ds.provider_id
-     LEFT JOIN users mg ON mg.id = b.reviewed_by
-     WHERE b.id = ?$cond"
-);
-$st->execute(array_merge([$id], $cp));
-$b = $st->fetch();
-
-$clashes = $pdo->prepare("SELECT id, start_at, end_at FROM bookings WHERE vehicle_id = ? AND status = 'approved' AND id <> ? AND start_at < ? AND end_at > ? ORDER BY start_at");
-$clashes->execute([$b['vehicle_id'], $id, $b['end_at'], $b['start_at']]);
-$clashes = $clashes->fetchAll();
-$pay = $pdo->prepare("SELECT amount, method, reference_no, status, paid_at FROM payments WHERE booking_id = ? ORDER BY id");
+$pay = $pdo->prepare("SELECT id, amount, method, reference_no, status, paid_at FROM payments WHERE booking_id = ? ORDER BY id");
 $pay->execute([$id]);
 $payments = $pay->fetchAll();
-$days = max(1, (int)ceil((strtotime($b['end_at']) - strtotime($b['start_at'])) / 86400));
-$started = strtotime($b['start_at']) <= time();
-$needsDriver = $b['with_driver'] && !$b['driver_service_id'] && !$b['own_driver_id'];
-$drivers = $needsDriver && $b['status'] === 'pending' ? my_driver_services($pdo, $m) : [];
+$rev = $pdo->prepare("SELECT rating, comment FROM reviews WHERE booking_id = ?");
+$rev->execute([$id]);
+$review = $rev->fetch();
+$place = fn(?string $street, ?string $brgy, ?string $city) => implode(', ', array_filter([$street, $brgy, $city]));
 
-manager_header('Booking #' . $id, 'approvals.php');
+manager_header('Booking #' . $id, 'approvals.php', $m);
 if ($err) echo '<p class="err">' . e($err) . '</p>';
 ?>
 <p><a href="approvals.php?tab=bookings">&larr; Back to approvals</a></p>
-
-<?php if ($b['status'] === 'pending' && $clashes): ?>
-  <p class="note"><b>Date clash.</b> This vehicle already has an approved booking in these dates:
-    <?php foreach ($clashes as $c): ?><a href="booking.php?id=<?= (int)$c['id'] ?>">#<?= (int)$c['id'] ?></a> (<?= e(fmt_dt($c['start_at'])) ?> to <?= e(fmt_dt($c['end_at'])) ?>) <?php endforeach; ?>
-    It cannot be approved unless one of them changes.</p>
-<?php endif; ?>
-
-<?php
-$driverText = $b['with_driver']
-    ? ($b['driver_title'] ? $b['driver_title'] . ' (' . $b['driver_provider'] . ')' : ($b['own_driver_id'] ? "The vehicle's own driver" : 'Needed, not chosen yet'))
-    : 'No driver';
-render_kv([
-    'Status'          => ['html' => '<span class="badge badge-' . e($b['status']) . '">' . e(ucfirst($b['status'])) . '</span>'],
-    'Customer'        => $b['customer'],
-    'Contact'         => trim($b['customer_email'] . ' ' . ($b['customer_phone'] ?? '')),
-    'Vehicle'         => $b['model'] . ' (' . ucfirst($b['type']) . ', ' . $b['plate_no'] . ')',
-    'Provider'        => $b['provider'] . ($b['provider_phone'] ? ' - ' . $b['provider_phone'] : ''),
-    'Pickup'          => area_place($b['pickup_barangay'], $m['city'], $b['pickup_street']),
-    'Trip'            => fmt_dt($b['start_at']) . ' to ' . fmt_dt($b['end_at']) . ' (' . $days . ' day' . ($days > 1 ? 's' : '') . ')',
-    'Driver'          => $driverText,
-    'Rate'            => peso($b['rate_per_day']) . ' per day',
-    'Total'           => peso($b['total_price']),
-    'Requested'       => fmt_dt($b['created_at']),
-    'Reviewed by'     => $b['reviewer'],
-]);
-?>
-
-<h2>Decision</h2>
-<div class="panel">
-<?php if ($b['status'] === 'pending'): ?>
-  <div class="actions">
-    <form method="post">
-      <?= csrf_field() ?><input type="hidden" name="id" value="<?= $id ?>"><input type="hidden" name="action" value="approve">
-      <?php if ($needsDriver): ?>
-        <label>Driver for this trip
-          <select name="driver_service_id" required>
-            <option value="">Choose a driver</option>
-            <?php foreach ($drivers as $d): ?><option value="<?= (int)$d['id'] ?>"><?= e($d['provider'] . ' - ' . $d['title']) ?></option><?php endforeach; ?>
-          </select>
-        </label>
-      <?php endif; ?>
-      <button <?= ($needsDriver && !$drivers) ? 'disabled' : '' ?>>Approve booking</button>
-    </form>
-    <form method="post" onsubmit="return confirm('Reject this booking?')">
-      <?= csrf_field() ?><input type="hidden" name="id" value="<?= $id ?>"><input type="hidden" name="action" value="reject">
-      <label>Note (optional, kept in the admin log) <input name="note" maxlength="150"></label>
-      <button class="danger">Reject</button>
-    </form>
-  </div>
-  <?php if ($needsDriver && !$drivers): ?><p class="muted" style="margin-bottom:0">No available driver service in your city. Add one on the Services page first.</p><?php endif; ?>
-<?php elseif ($b['status'] === 'approved'): ?>
-  <?php if ($started): ?>
-    <form method="post" class="actions" onsubmit="return confirm('Mark this booking as completed?')">
-      <?= csrf_field() ?><input type="hidden" name="id" value="<?= $id ?>"><input type="hidden" name="action" value="complete">
-      <button>Mark completed</button>
-    </form>
-  <?php else: ?>
-    <p class="muted" style="margin:0">Approved. It can be marked completed once the trip has started.</p>
-  <?php endif; ?>
-<?php else: ?>
-  <p class="muted" style="margin:0">This booking is <?= e($b['status']) ?> and can no longer be changed.</p>
-<?php endif; ?>
+<div class="grid">
+  <div class="card"><div class="n" style="font-size:1.2rem"><?= e(ucfirst($b['status'])) ?></div><div class="l">Status</div></div>
+  <div class="card"><div class="n"><?= money($b['total_price']) ?></div><div class="l">Total price</div></div>
+  <div class="card"><div class="n" style="font-size:1.05rem"><?= e(substr($b['created_at'], 0, 16)) ?></div><div class="l">Submitted</div></div>
 </div>
 
+<?php if ($b['status'] === 'pending'): ?>
+<h2>Decide</h2>
+<form method="post" class="box">
+  <?= csrf_field() ?><input type="hidden" name="id" value="<?= $id ?>">
+  <?php if ($b['with_driver']): ?>
+    <label>Driver for this trip
+      <select name="driver_service_id" required>
+        <option value="">Choose a driver</option>
+        <?php $pre = (int)($b['driver_service_id'] ?: $b['own_driver_id']); foreach ($drivers as $d): ?>
+          <option value="<?= (int)$d['id'] ?>" <?= $pre === (int)$d['id'] ? 'selected' : '' ?>><?= e($d['full_name'] . ' - ' . $d['title']) ?><?= (int)$d['id'] === (int)$b['own_driver_id'] ? ' (vehicle\'s own driver)' : '' ?></option>
+        <?php endforeach; ?>
+      </select>
+    </label>
+  <?php endif; ?>
+  <div class="actions">
+    <button name="action" value="approve">Approve</button>
+    <button name="action" value="reject" class="danger" formnovalidate onclick="return confirm('Reject this booking? The online payment will be refunded.')">Reject</button>
+  </div>
+</form>
+<?php elseif ($b['status'] === 'approved'): ?>
+<h2>Next step</h2>
+<form method="post" onsubmit="return confirm('Mark this booking as completed?')">
+  <?= csrf_field() ?><input type="hidden" name="id" value="<?= $id ?>">
+  <button name="action" value="complete">Mark as completed</button>
+</form>
+<?php endif; ?>
+
+<h2>Customer</h2>
+<?php render_kv([
+    'Name' => $b['customer'], 'Email' => $b['customer_email'], 'Phone' => $b['customer_phone'],
+    'Address' => $place($b['customer_street'], $b['customer_barangay'], $b['customer_city']),
+]); ?>
+
+<h2>Vehicle and trip</h2>
+<?php render_kv([
+    'Vehicle'  => ucfirst($b['type']) . ': ' . $b['model'] . ' (' . $b['plate_no'] . ')',
+    'Rate per day' => money($b['rate_per_day']),
+    'Provider' => $b['provider'] . ($b['provider_phone'] ? ' (' . $b['provider_phone'] . ')' : ''),
+    'Start'    => $b['start_at'], 'End' => $b['end_at'], 'Pickup' => $b['pickup_street'],
+    'Driver'   => $b['with_driver'] ? ($b['driver_name'] ? $b['driver_name'] . ' (' . $b['driver_title'] . ')' : 'Requested, not assigned yet') : 'Drive yourself',
+]); ?>
+
 <h2>Payments</h2>
-<?php
-foreach ($payments as &$p) { $p['amount'] = peso($p['amount']); $p['paid_at'] = fmt_dt($p['paid_at']); $p['status'] = ucfirst($p['status']); }
-unset($p);
-render_table(['amount' => 'Amount', 'method' => 'Method', 'reference_no' => 'Reference', 'status' => 'Status', 'paid_at' => 'Paid at'], $payments);
+<?php render_table(['id' => '#', 'amount' => 'Amount', 'method' => 'Method', 'reference_no' => 'Reference', 'status' => 'Status', 'paid_at' => 'Paid at'], $payments); ?>
+
+<?php if ($review): ?>
+<h2>Review</h2>
+<?php render_kv(['Rating' => $review['rating'] . ' / 5', 'Comment' => $review['comment']]); endif;
 page_footer();

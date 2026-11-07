@@ -8,7 +8,7 @@ if (!$s) {
     exit;
 }
 if ($s['role'] === 'admin' || $s['role'] === 'manager') {
-    header('Location: ' . $s['role'] . '/dashboard.php');
+    header('Location: ' . ($s['role'] === 'admin' ? 'admin/dashboard.php' : 'manager/dashboard.php'));
     exit;
 }
 

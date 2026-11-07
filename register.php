@@ -4,8 +4,9 @@ require_once __DIR__ . '/includes/site.php';
 require_once __DIR__ . '/includes/areas.php';
 
 $signedInAs = $_SESSION['user']['role'] ?? '';
-if ($signedInAs === 'admin' || $signedInAs === 'user') {
-    header('Location: ' . ($signedInAs === 'admin' ? 'admin/dashboard.php' : 'home.php'));
+$landing = ['admin' => 'admin/dashboard.php', 'manager' => 'manager/dashboard.php', 'user' => 'home.php'];
+if (isset($landing[$signedInAs])) {
+    header('Location: ' . $landing[$signedInAs]);
     exit;
 }
 

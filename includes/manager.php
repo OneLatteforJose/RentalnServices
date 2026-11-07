@@ -1,13 +1,14 @@
 <?php
-// Shared by every page in /manager. A manager only ever sees and changes rows whose area is in their own city
-// (same province + city_municipality as the barangay on their account). Every query goes through city_filter()
-// so there is one rule for it, and no page trusts an id from the URL without that check.
-require_once __DIR__ . '/site.php';      // auth.php (session, csrf, log_action) and service_categories()
-require_once __DIR__ . '/areas.php';
+// Helpers for the manager side. A manager covers one city: every `areas` row that shares the
+// province and city_municipality of the manager's own area. Every manager query is limited to it.
+require_once __DIR__ . '/auth.php';
 require_once __DIR__ . '/layout.php';
+require_once __DIR__ . '/areas.php';
+require_once __DIR__ . '/site.php';   // service_categories(), vehicle_types()
 
-// Re-checks the database on every request, so a deactivated manager is locked out immediately.
-// Anyone else who opens a manager URL is only redirected: their own session is left alone.
+// The signed-in manager, or a redirect to the login page. Re-checks the database on every request,
+// so a manager who was deactivated (or lost their area) is locked out immediately.
+// Returns ['id', 'name', 'area_id', 'province', 'city'].
 function require_manager(): array {
     static $m = null;
     if ($m !== null) {
@@ -21,81 +22,47 @@ function require_manager(): array {
         );
         $st->execute([$_SESSION['user']['id'] ?? 0]);
         if ($row = $st->fetch()) {
-            $row['key'] = city_key($row['province'], $row['city']);
-            return $m = $row;
+            return $m = ['id' => (int)$row['id'], 'name' => $row['full_name'], 'area_id' => (int)$row['area_id'],
+                         'province' => $row['province'], 'city' => $row['city']];
         }
-        $_SESSION = [];   // deactivated, removed, or has no barangay
+        $_SESSION = [];   // deactivated or removed
     }
     header('Location: ../login.php');
     exit;
 }
 
-function db_value(PDO $pdo, string $sql, array $params = []) {
-    $st = $pdo->prepare($sql);
-    $st->execute($params);
-    return $st->fetchColumn();
+// [province, city] for the placeholders of "ca.province = ? AND ca.city_municipality = ?".
+function city_params(array $m): array {
+    return [$m['province'], $m['city']];
 }
 
-// [pending bookings, pending service requests] in the manager's city. Two indexed COUNTs.
-function manager_pending(PDO $pdo, array $m): array {
-    [$cond, $cp] = city_filter($m['key'], 'a');
+function manager_nav(): array {
     return [
-        (int)db_value($pdo, "SELECT COUNT(*) FROM bookings b JOIN areas a ON a.id = b.area_id WHERE b.status = 'pending'$cond", $cp),
-        (int)db_value($pdo, "SELECT COUNT(*) FROM service_requests r JOIN areas a ON a.id = r.area_id WHERE r.status = 'pending'$cond", $cp),
+        'dashboard.php' => ['Dashboard', 'home'],
+        'approvals.php' => ['Approvals', 'calendar'],
+        'vehicles.php'  => ['Vehicles', 'car'],
+        'services.php'  => ['Services', 'wrench'],
+        'providers.php' => ['Providers', 'users'],
     ];
 }
 
-function manager_header(string $title, string $active = ''): void {
-    $m = require_manager();
-    [$pb, $pr] = manager_pending(db(), $m);
-    shell_header($title, $active, [
-        'dashboard.php' => ['Dashboard', 'home'],
-        'approvals.php' => ['Approvals', 'calendar'],
-        'vehicles.php'  => ['Vehicles',  'car'],
-        'services.php'  => ['Services',  'wrench'],
-        'providers.php' => ['Providers', 'briefcase'],
-    ], [
-        'suffix'   => 'Manager',
-        'name'     => $m['full_name'],
-        'city'     => $m['city'] . ', ' . $m['province'],
-        'bell'     => $pb + $pr,
-        'bellHref' => 'approvals.php?tab=' . ($pb === 0 && $pr > 0 ? 'requests' : 'bookings') . '&status=pending',
-    ]);
+// Pending approvals in the manager's city, for the bell: [[text, link, count], ...]
+function manager_attention(array $m): array {
+    $items = [];
+    try {
+        foreach ([['bookings', 'booking', 'bookings'], ['service_requests', 'service request', 'requests']] as [$table, $noun, $tab]) {
+            $st = db()->prepare("SELECT COUNT(*) FROM $table x JOIN areas ca ON ca.id = x.area_id WHERE x.status = 'pending' AND ca.province = ? AND ca.city_municipality = ?");
+            $st->execute(city_params($m));
+            $c = (int)$st->fetchColumn();
+            if ($c) $items[] = [$c . ' ' . $noun . ($c === 1 ? '' : 's') . ' awaiting approval', "approvals.php?tab=$tab&status=pending", $c];
+        }
+    } catch (Throwable $e) {
+    }
+    return $items;
 }
 
-function fmt_dt(?string $dt): string {
-    return $dt ? date('M j, Y g:i A', strtotime($dt)) : '-';
-}
-
-function area_in_my_city(PDO $pdo, array $m, int $areaId): bool {
-    return (bool)db_value($pdo, "SELECT 1 FROM areas WHERE id = ? AND province = ? AND city_municipality = ?", [$areaId, $m['province'], $m['city']]);
-}
-
-// Barangays of the manager's city: [['id' => .., 'barangay' => ..], ...]
-function my_barangays(PDO $pdo, array $m): array {
-    $st = $pdo->prepare("SELECT id, barangay FROM areas WHERE province = ? AND city_municipality = ? ORDER BY barangay");
-    $st->execute([$m['province'], $m['city']]);
-    return $st->fetchAll();
-}
-
-// Active providers living in the manager's city.
-function my_providers(PDO $pdo, array $m): array {
-    $st = $pdo->prepare(
-        "SELECT u.id, u.full_name, pp.business_name FROM users u
-         JOIN areas a ON a.id = u.area_id LEFT JOIN provider_profiles pp ON pp.user_id = u.id
-         WHERE u.role = 'provider' AND u.is_active = 1 AND a.province = ? AND a.city_municipality = ? ORDER BY u.full_name"
-    );
-    $st->execute([$m['province'], $m['city']]);
-    return $st->fetchAll();
-}
-
-// Driver services offered in the manager's city (a booking "with driver" uses one of these).
-function my_driver_services(PDO $pdo, array $m, bool $onlyAvailable = true): array {
-    $st = $pdo->prepare(
-        "SELECT s.id, s.title, s.provider_id, p.full_name AS provider FROM services s
-         JOIN users p ON p.id = s.provider_id JOIN areas a ON a.id = s.area_id
-         WHERE s.category = 'driver' AND a.province = ? AND a.city_municipality = ?" . ($onlyAvailable ? " AND s.status = 'available'" : '') . " ORDER BY p.full_name, s.title"
-    );
-    $st->execute([$m['province'], $m['city']]);
-    return $st->fetchAll();
+function manager_header(string $title, string $active, array $m, array $opts = []): void {
+    page_header($title, $active, array_merge([
+        'nav' => manager_nav(), 'attention' => manager_attention($m), 'label' => 'Manager',
+    ], $opts));
 }

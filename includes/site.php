@@ -52,8 +52,10 @@ function public_header(string $title, bool $onHome = false): void {
       <a href="<?= $home ?>#how">How it works</a>
       <a href="<?= $home ?>#partners">Partners</a>
     </nav>
-    <?php if (in_array($user['role'] ?? '', ['admin', 'manager'], true)): ?>
-      <a class="btn btn-road" href="<?= e($user['role']) ?>/dashboard.php">Dashboard</a>
+    <?php if (($user['role'] ?? '') === 'admin'): ?>
+      <a class="btn btn-road" href="admin/dashboard.php">Dashboard</a>
+    <?php elseif (($user['role'] ?? '') === 'manager'): ?>
+      <a class="btn btn-road" href="manager/dashboard.php">Dashboard</a>
     <?php elseif (($user['role'] ?? '') === 'user'): ?>
       <a class="btn btn-road" href="home.php">My account</a>
     <?php else: ?>
